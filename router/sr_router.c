@@ -31,7 +31,7 @@
 /* See pseudo-code in sr_arpcache.h */
 void handle_arpreq(struct sr_instance* sr, struct sr_arpreq *req){
   /* TODO: Fill this in */
-  
+   
 }
 
 /*---------------------------------------------------------------------
@@ -92,7 +92,51 @@ void sr_handlepacket(struct sr_instance* sr,
   printf("*** -> Received packet of length %d\n",len);
 
   /* TODO: Add forwarding logic here */
- 
+  sr_ethernet_hdr_t *etheader = (sr_ethernet_hdr_t *)packet;
+  sr_ip_hdr_t *ipheader = (sr_ip_hdr_t *)(packet+sizeof(sr_ethernet_hdr_t));
+
+  if(etheader->ether_type==0x800){
+    struct sr_rt* temp1 = sr->routing_table;
+    struct sr_rt* rt = sr->routing_table;
+    uint32_t destip = ipheader->ip_dst;
+    uint32_t lmatch;
+    /*prefix-match*/
+    while(rt != NULL)
+    {
+      uint32_t a = htonl(temp1->dest.s_addr) & htonl(temp1->mask.s_addr);
+      uint32_t b = htonl(temp1->mask.s_addr) & destip; 
+      
+      if((a==b)){
+        if((lmatch <= htonl(temp1->mask.s_addr))){
+          lmatch = htonl(temp1->mask.s_addr);
+          rt = temp1;  
+        }
+      }
+      temp1 = temp1->next;
+    }
+
+    struct sr_if* pinterface =  sr_get_interface(sr, rt->interface);
+    char iface[sr_IFACE_NAMELEN];
+    memcpy(iface, pinterface->name, sr_IFACE_NAMELEN);
+    unsigned char *curmacaddr = (unsigned char *)malloc(ETHER_ADDR_LEN);
+    memcpy(curmacaddr, pinterface->addr, ETHER_ADDR_LEN);
+
+    struct sr_arpentry *arp = sr_arpcache_lookup(sr->&cache, (rt->dest).s_addr);
+    if(arp!=NULL){
+      char destmacaddr[6];
+      memcpy(destmacaddr, arp->mac, 6);
+
+      memcpy(etheader->ether_shost, curmacaddr, ETHER_ADDR_LEN);
+      memcpy(etheader->ether_dhost, destmacaddr, ETHER_ADDR_LEN);
+
+      sr_send_packet(sr , packet , len , iface);
+
+      }
+    else{
+      struct sr_arpreq* request = sr_arpcache_queuereq(sr->&cache, destip, packet, len, iface);
+      handle_arpreq(request);
+    }
+  }
   
 
 }/* -- sr_handlepacket -- */

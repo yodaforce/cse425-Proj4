@@ -18,7 +18,12 @@
 */
 void sr_arpcache_sweepreqs(struct sr_instance *sr) { 
   /* TODO: Fill this in */
- 
+    sr_arpreq *temp=sr->cache.requests;
+    while(temp!=NULL){
+        handle_arpreq(temp);
+        temp=temp->next;
+    }
+    
 }
 
 /* You should not need to touch the rest of this code. */
